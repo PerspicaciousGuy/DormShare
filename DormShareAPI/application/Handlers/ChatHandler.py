@@ -1,11 +1,16 @@
+from datetime import datetime
+
 from sqlalchemy import select, or_
+
+from DormShareAPI.application.Data.PydenticModels import SendMessage
 from DormShareAPI.application.Services.Auth import get_current_user
 from DormShareAPI.application.Data.DataBase import get_session
-from DormShareAPI.application.Data.models import User, Chat, UserRole, Item
+from DormShareAPI.application.Data.models import User, Chat, UserRole, Item, Message
 from fastapi import Depends, HTTPException
 from sqlmodel import Session
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select as sa_select
+from sqlmodel import select as sm_select
 
 
 
@@ -109,3 +114,55 @@ async def chatDelete(chat_id, session, current_user):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"can't delete chat: {e}")
 
+
+async def getNewMessages(chat_id, after: datetime, session, current_user):
+    try:
+        chat = session.get(Chat, chat_id)
+
+        if not chat:
+            raise HTTPException(status_code=404, detail="chat not found")
+
+        if chat.lender_id != current_user.id and chat.borrower_id != current_user.id and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+
+        messages = session.exec(
+            sm_select(Message)
+            .where(Message.chat_id == chat_id)
+            .where(Message.timestamp > after)
+            .order_by(Message.timestamp)
+        ).all()
+
+        return {"messages": messages}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Something went wrong: {e}")
+
+
+async def sendMessage(chat_id, data: SendMessage, session, current_user):
+    try:
+        chat = session.get(Chat, chat_id)
+
+        if not chat:
+            raise HTTPException(status_code=404, detail="chat not found")
+
+        if chat.lender_id != current_user.id and chat.borrower_id != current_user.id:
+            raise HTTPException(status_code=403, detail="not enough permissions")
+
+        message = Message(
+            content=data.content,
+            sender_id=current_user.id,
+            chat_id=chat_id
+        )
+        session.add(message)
+        session.commit()
+        session.refresh(message)
+
+        return message
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Something went wrong: {e}")

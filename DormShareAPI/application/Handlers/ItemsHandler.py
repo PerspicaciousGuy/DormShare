@@ -38,13 +38,17 @@ async def get_items(session, current_user):
             User.university == current_user.university
         ).options(
             selectinload(Item.images),
-            selectinload(Item.reviews)
+            selectinload(Item.reviews),
+            selectinload(Item.owner)
         )
 
 
 
         items = session.execute(statement).scalars().all()
-        return items
+        return [
+            {**item.__dict__, "owner_username": item.owner.username}
+            for item in items
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Something went wrong: {e}")
 
@@ -65,7 +69,7 @@ async def get_item_by_id(item_id, session, current_user):
         if item.owner.university != current_user.university:
             raise HTTPException(status_code=403, detail="Can't get info about an item from another university")
 
-        return item
+        return {**item.__dict__, "owner_username": item.owner.username}
     except HTTPException:
         raise
 
@@ -81,11 +85,15 @@ async def get_items_by_category(category, session, current_user):
             User.university == current_user.university
         ).options(
             selectinload(Item.images),
-            selectinload(Item.reviews)
+            selectinload(Item.reviews),
+            selectinload(Item.owner)
         )
-        items = session.execute(statement).scalars().all()
 
-        return items
+        items = session.execute(statement).scalars().all()
+        return [
+            {**item.__dict__, "owner_username": item.owner.username}
+            for item in items
+        ]
     except Exception as e:
         print(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
@@ -154,8 +162,8 @@ async def update_item(item_id, item_data: ItemUpdate, session, current_user):
     for k, v in update_data.items():
         setattr(db_item, k, v)
 
-        session.add(db_item)
-        session.commit()
-        session.refresh(db_item)
+    session.add(db_item)
+    session.commit()
+    session.refresh(db_item)
 
-        return db_item
+    return db_item

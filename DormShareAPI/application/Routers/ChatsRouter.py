@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends, WebSocket, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 from DormShareAPI.application.Data.models import User, Chat
 from DormShareAPI.application.Services.Auth import get_current_user
 from DormShareAPI.application.Data.DataBase import get_session
-from DormShareAPI.application.Handlers.ChatHandler import CreateChat, getChatById, getUserChats, chatDelete
+from DormShareAPI.application.Handlers.ChatHandler import CreateChat, getChatById, getUserChats, chatDelete, getNewMessages, sendMessage
 from uuid import UUID
-from DormShareAPI.application.Handlers.WebsocketHandler import chat_handler
-from DormShareAPI.application.Services.ConnectionManager import manager
-from DormShareAPI.application.Data.PydenticModels import ChatResponse
+from DormShareAPI.application.Data.PydenticModels import ChatResponse, SendMessage
+from datetime import datetime
 
 
 
@@ -42,11 +41,21 @@ async def delete_chat(chat_id: UUID, session: Session = Depends(get_session),
     return await chatDelete(chat_id, session, current_user)
 
 
-@router.websocket("/ws/{chat_id}")
-async def websocket_endpoint(
-    websocket: WebSocket,
+@router.get("/messages/{chat_id}")
+async def get_new_messages(
     chat_id: UUID,
-    token: str = Query(...),
-    session: Session = Depends(get_session)
+    after: datetime,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)):
+
+    return await getNewMessages(chat_id, after, session, current_user)
+
+
+@router.post("/messages/{chat_id}", status_code=201)
+async def send_message(
+    chat_id: UUID,
+    data: SendMessage,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
-    await chat_handler(websocket, str(chat_id), token, session, manager)
+    return await sendMessage(chat_id, data, session, current_user)

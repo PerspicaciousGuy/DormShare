@@ -20,6 +20,8 @@ def get_user_from_token(token: str, session: Session) -> type[User] | None:
 
 
 async def chat_handler(websocket: WebSocket, chat_id: str, token: str, session: Session, manager):
+    await websocket.accept()
+
     user = get_user_from_token(token, session)
     if not user:
         await websocket.close(code=4001)
